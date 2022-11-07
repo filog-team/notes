@@ -62,7 +62,7 @@
 
 ### Java 线程(Java thread)和操作系统线程(OS thread)
 
-> java中hotspot 规范是典型的一对一线程模型，jvm平台上只做少量的管理
+> java中hotspot 规范是典型的一对一线程模型，jvm只做了封装和调用的方法
 
 #### 1.POXIS 规范
 
