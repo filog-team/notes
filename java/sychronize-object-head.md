@@ -1,6 +1,6 @@
 # Sychronize-Object-Head
 
-sychronize是java中开启锁同步的的关键字,用于修饰在对象、静态和非静态称之为'同步锁',以达到在程序操作临界资源不受其他线程影响的目的。在代码中sychronize 和 cas中lock 及 unlock  相似:
+sychronize是java中开启锁同步的的关键字,用于修饰在对象、静态和非静态称之为'同步锁',以达到在程序操作临界资源不受其他线程影响的目的。
 
 ````java
 sychroinzed(对象){
@@ -28,47 +28,19 @@ unlock();
 
 ### sychronized 锁的是对象还是代码块？
 
+官方资料：https://openjdk.org/groups/hotspot/docs/HotSpotGlossary.html
+
+
+
 #### 对象布局
 
-####  mark word(first word of every object header)
+对象是java中的基本编程基本单位，指的是某类事物中的某个单独个体，在java中每个这些单独的个体都有一个属于自己的对象头进行体现。对象头存储的大概有对象的所属类型，垃圾回收机制的分代年龄，锁状态，计算hash后的hashcode值,在内存中对象的布局信息，共64位。
 
-**原文:**
-
-> The first word of every object header. Usually a set of bitfields including synchronization state and identity hash code. May also be a pointer (with characteristic low bit encoding) to synchronization related information. During GC, may contain GC state bits.
-
-对象头的第一部分,随着情况不同包含了与以下四个信息: 
-
-1.synchronization状态(synchronization state)
-
-2.对象的hashcode(identity hash code)
-
-3.与synchronization相关的线程id(pointer synchronization related information)
-
-4.gc期间的分代年龄(GC state bit)
-
-
-
-
-
-#### klass pointer(second word of every object header)
-
-**原文:**
-
-> The second word of every object header. Points to another object (a metaobject) which describes the layout and behavior of the original object. For Java objects, the "klass" contains a C++ style "vtable".
-
-对象头的第二部分, 指向另一个对象metaobject 元对象
-
-metaobject 元对象:描述原来对象的布局和行为,也可以理解为描述java对象的C++对象
-
-
+> object header = (mark word + klass pointer)
 
 #### object header
 
-**原文:**
-
-> Common structure at the beginning of every GC-managed heap object. (Every oop points to an object header.) Includes fundamental information about the heap object's layout, type, GC state, synchronization state, and identity hash code. Consists of two words. In arrays it is immediately followed by a length field. Note that both Java objects and VM-internal objects have a common object header format.
-
-交由gc 管理的对象开头的公共结构部分,包括:
+> 交由gc 管理的对象开头的公共结构部分,包括:
 
 1.关于堆对象布局的基本信息(fundamental information about the heap object's layout)
 
@@ -80,27 +52,37 @@ metaobject 元对象:描述原来对象的布局和行为,也可以理解为描�
 
 5.identity hash code
 
-> object header = (mark word + klass pointer)
 
 
+####  mark word(first word of every object header)
 
-#### biased locking(偏向锁)
+对象头的第一部分,前面64位，主要记录了该对象在JVM内存中的各种状态，随着对象在jvm生命周期及生命状态情况不同，其主要包含了以下四种信息: 
 
-> An optimization in the VM that leaves an object as logically locked by a given thread even after the thread has released the lock. The premise is that if the thread subsequently reacquires the lock (as often happens), then reacquisition can be achieved at very low cost. If a different thread tries to acquire a biased lock then the bias must be revoked from the current bias owner.
+1.synchronization状态(synchronization state)
+
+2.对象的hashcode(identity hash code)
+
+3.与synchronization相关的线程id(pointer synchronization related information)
+
+4.gc期间的分代年龄(GC state bit)
+
+###### klass pointer(second word of every object header)
+
+对象头的第二部分,后32位指向另一个对象metaobject 元对象，这是一个C++对象，用于描述JAVA对象的布局和行为,也可以理解为描述java对象的C++对象。
+
+###### biased locking(偏向锁)
 
 jvm对锁的优化,线程释放锁后保留逻辑上的锁定
 
 如果线程释放锁后重新获取锁(经常发生),可以以非常低的成本重新获取。只有一个线程能持有biased locking。
 
+###### Lightweight locking(轻量锁)
 
+轻量锁也是用来提升程序的性能的。对于交替执行中的并发程序，轻量锁通过JVM平台的CAS操作来规避频繁触发系统调用的情况。 
 
-#### Lightweight locking(轻量锁)
+###### heavyweight lock(重量锁)
 
-轻量锁也是用来提升程序的性能的。对于交替执行的程序，轻量锁通过JVM平台的CAS操作来规避频繁触发MUTEX的情况。轻量锁的锁标识锁00 
-
-#### heavyweight lock(重量锁)
-
-触发系统级调用的锁(MUTEX)
+触发系统调用的锁(MUTEX)
 
 
 
@@ -125,20 +107,9 @@ public void testObjectHeader() throws IOException {
 
 
 
-通过搜索 object header 在MonitorSnippets C++类中对状态进行了这样的描述
+通过在OpenJdk源码搜索 “object header” MonitorSnippets C++类中对状态进行了这样的描述
 
->    Note also that the biased state contains the age bits normally
->    contained in the object header. Large increases in scavenge
->    times were seen when these bits were absent and an arbitrary age
->    assigned to all biased objects, because they tended to consume a
->    significant fraction of the eden semispaces and were not
->    promoted promptly, causing an increase in the amount of copying
->    performed. The runtime system aligns all JavaThread* pointers to
->    a very large value (currently 128 bytes (32bVM) or 256 bytes (64bVM))
->    to make room for the age bits & the epoch bits (used in support of
->    biased locking), and for the CMS "freeness" bit in the 64bVM (+COOPs).
-
-1.normal object
+1.普通对象-normal object
 
 ````java
 未使用     hashcode  （56 bit）     分代年龄   偏向锁标识       锁  (8 bit) 共 64
@@ -148,7 +119,7 @@ unused:25 hash:31 -->| cms_free:1 age:4    biased_lock:1 lock:2 (COOPs && normal
 
 普通对象表示无锁状态的对象布局，因为没有计算hashcode，所以
 
-2.baised object
+2.偏向锁对象-baised object
 
 ````java
 线程id                     (56 bit)
@@ -158,9 +129,9 @@ JavaThread*:54 epoch:2  -->|  cms_free:1 age:4    biased_lock:1 lock:2 (COOPs &&
 
 
 
-被synchronize 关键字修饰后的锁状态有以下几种状态
+被synchronize 关键字修饰后的锁状态有以下几种状态：
 
-1.无锁状态:计算了hashcode ,不满足偏向条件
+1.无锁状态:计算了hashcode ,不满足偏向条件(001)
 
 ````c++
 hash code 2cccf134 
@@ -174,9 +145,7 @@ OFFSET  SIZE   TYPE DESCRIPTION                               VALUE
      12     4        (loss due to the next object alignment)
 ````
 
-001是无锁的状态，当计算了hashcode之后,后面后31位填充的是hashcode ，因此对象头没有办法装下54位的线程id。所以不满足偏向锁的上锁条件，无法膨胀成偏向锁，一旦发生了资源交替执行的状态,就会由无锁边成轻量锁。
-
-这里值得注意的是此处的， hashcode 是由右往左从下往上输出,这是因为机器使用了小端存储的机制在小端存储模式的情况下锁体现的顺序的如下： 
+001是无锁的状态，当计算了hashcode之后,后面后31位填充的是hashcode ，因此对象头没有办法装下54位的线程id。所以不满足偏向锁的上锁条件，无法膨胀成偏向锁，一旦发生了资源交替执行的状态,就会由无锁边成轻量锁。这里值得注意的是此处的，跟注释中所记录的不同hashcode 是由右往左从下往上输出,这是因为机器使用了小端存储的机制在小端存储模式的情况下锁体现的顺序的如下： 
 
 ​            unsed  age biased_lock    lock        hashcode     unsed     
 
@@ -184,11 +153,11 @@ OFFSET  SIZE   TYPE DESCRIPTION                               VALUE
 
 ​           unsed age biased_lock    lock          ThreadId
 
- bit:       1         4          1                    2                  54
+ bit:       1         4          1                    2               54
 
 
 
-2.无锁状态,  没有计算hashcode  满足偏向条件
+2.无锁状态,  没有计算hashcode  满足偏向条件(001)
 
 ````java
  OFFSET  SIZE   TYPE DESCRIPTION                               VALUE
@@ -222,7 +191,7 @@ Space losses: 0 bytes internal + 0 bytes external = 0 bytes total
 
 101 为可偏向,后面提示的是线程id，这时候该对象已经被上锁，当线程结束后，再次进入线程加锁，系统缓存了线程id不在需要创建线程，只需要沿用原来的线程id 即可。
 
-3.膨胀为 非偏向 轻量锁 :000 第一位是偏向为，后面两位是锁的状态，这是一把轻量锁
+3.膨胀为 非偏向 轻量锁 第一位是偏向为，后面两位是锁的状态，这是一把轻量锁(000)
 
 ````java
 java.lang.Object object internals:
@@ -240,7 +209,7 @@ Space losses: 0 bytes internal + 4 bytes external = 4 bytes total
 
 当发生资源交替执行时锁会自动膨胀为轻量锁
 
-4.膨胀为 非偏向重量锁 :0 10
+4.膨胀为 非偏向重量锁 (010)
 
 ````java
 2022-12-30 22:25:24.771  INFO 12905 --- [      Thread-55] com.example.demo.DemoApplicationTests    : com.example.demo.threadlearn.mylock.J object internals:
@@ -259,7 +228,7 @@ Space losses: 0 bytes internal + 4 bytes external = 4 bytes total
 
 当发生资源竞争时锁会自动膨胀为重量锁
 
-以上是当sychronize 修饰方法时，会给当前方法所在的对象头markwork上的锁状态进行修改，按照以上的结果来看 synchronize 因为改的是object header 里面的状态，所以认为是一把对象锁。根据object header 里面的状态对代码进行临界区操作.
+以上是当sychronize 修饰方法时，会给当前方法所在的对象头markwork上的锁状态进行修改，按照以上的结果来看 synchronize 因为改的是object header 里面的状态，所以认为是一把对象锁。根据object header 里面的状态对代码进行临界区操作。
 
 
 
@@ -297,3 +266,4 @@ sychronized 进行修饰时，会对当前修饰的对象头里面进行相应�
 
 
 To be continue...
+
